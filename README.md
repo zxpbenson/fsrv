@@ -12,6 +12,6 @@ go build fsrv.go
 ## 启动
 ./fsrv</br>
 或者</br>
-./fsrv -port 8080 -del true -store store</br>
+./fsrv -port 8080 -delable true -store ./store</br>
 或者</br>
-nohup ./fsrv -port 8080 -del true -store ./store > nohup.out 2>&1 &</br>
+nohup ./fsrv -port 8080 -delable true -store ./store >> nohup.out 2>&1 &</br>

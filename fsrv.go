@@ -143,8 +143,10 @@ function delFile(file) {
 
 		fmt.Fprintf(w, `</tr>`)
 
+		empty := true
 		for _, file := range files {
 			if !file.IsDir() {
+				empty = false
 				fileName := file.Name()
 				downloadURL := fmt.Sprintf("%s/download?file=%s", getURLRoot(), fileName)
 				fmt.Fprintf(w, `<tr>
@@ -157,6 +159,15 @@ function delFile(file) {
 				fmt.Fprintf(w, `</tr>`)
 			}
 		}
+
+		if empty {
+			if *delable {
+				fmt.Fprintf(w, `<tr><td colspan=3>This file store is empty, you can upload something now.</td></tr>`)
+			} else {
+				fmt.Fprintf(w, `<tr><td colspan=2>This file store is empty, you can upload something now.</td></tr>`)
+			}
+		}
+
 		fmt.Fprintf(w, `</table></body></html>`)
 	}
 }
@@ -247,9 +258,12 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	port = flag.String("port", "8080", "Specify the port to listen on")
-	delable = flag.Bool("del", false, "Enable del file by UI")
+	delable = flag.Bool("delable", false, "Enable del file by UI")
 	store = flag.String("store", "./store", "Specify the directory to store files")
 	flag.Parse()
+	fmt.Printf("delable : %t\n", *delable)
+	fmt.Printf("store : %s\n", *store)
+	fmt.Printf("port : %s\n", *port)
 
 	hn, err := os.Hostname()
 	if err != nil {
@@ -272,6 +286,7 @@ func main() {
 
 	addr := fmt.Sprintf(":%s", *port)
 	fmt.Printf("Server started on %s\n", addr)
+
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		fmt.Println("Failed to start server:", err)
 	}
