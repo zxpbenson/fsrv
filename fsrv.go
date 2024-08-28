@@ -182,6 +182,7 @@ func getURLRoot() string {
 
 func deleteFile(w http.ResponseWriter, r *http.Request) {
 	filename := r.URL.Query().Get("file")
+	filename = filepath.Base(filename)
 	filePath := filepath.Join(*store, filename)
 
 	fmt.Fprintf(w, `<html><head><title>FSrv</title></head><body><h1>Delete File</h1>`)
@@ -222,7 +223,7 @@ func deleteFile(w http.ResponseWriter, r *http.Request) {
 				return
 			} else {
 				fmt.Fprintf(w, `<p>Deleted file successfully : %s</p></body></html>`, filename)
-				fmt.Printf("Deleted file successfully : %s\n", filename)
+				fmt.Printf("Deleted file successfully : %s\n", filePath)
 				return
 			}
 		}
@@ -232,6 +233,7 @@ func deleteFile(w http.ResponseWriter, r *http.Request) {
 func downloadFile(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		filename := r.URL.Query().Get("file")
+		filename = filepath.Base(filename)
 		filePath := filepath.Join(*store, filename)
 
 		//校验文件是否存在
@@ -246,20 +248,19 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		fmt.Printf("Download file successfully : %s\n", filename)
-
 		// 设置响应头，提示浏览器下载文件
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 		w.Header().Set("Content-Type", "application/octet-stream")
 
 		http.ServeFile(w, r, filePath)
+		fmt.Printf("Download file successfully : %s\n", filename)
 	}
 }
 
 func main() {
-	port = flag.String("port", "8080", "Specify the port to listen on")
-	delable = flag.Bool("delable", false, "Enable del file by UI")
-	store = flag.String("store", "./store", "Specify the directory to store files")
+	port = flag.String("p", "8080", "Specify the port to listen on")
+	delable = flag.Bool("d", false, "Enable delete file by UI") //golang处理bool参数的方式是穿了就是true，没传就是false
+	store = flag.String("s", "./store", "Specify the directory to store files")
 	flag.Parse()
 	fmt.Printf("delable : %t\n", *delable)
 	fmt.Printf("store : %s\n", *store)
