@@ -23,6 +23,8 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 		// 添加一个跳转到文件列表页面的链接
 		fmt.Fprintf(w, `<p><a href="/files">Go to File List Page</a></p>`)
 
+		fmt.Fprintf(w, `<p>U can upload file by curl : </p><p>curl -F 'file=@/path/file' http://%s:%s/upload</p><p>or:</p>`, *hostname, *port)
+
 		fmt.Fprintf(w, `
 <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
     <input type="file" name="file" id="fileInput" text="SelectFile">
@@ -94,7 +96,7 @@ document.getElementById("uploadForm").onsubmit = function() {
             <h1>Uploaded file successfully !</h1>
             <p>Uploaded file: %s, </p><p>Size: %d bytes, </p><p>Time: %s</p>
             <p><a href="/files">Go to File List</a></p>
-            </body></html>`, filename, size, currentTime)
+            </body></html>\n`, filename, size, currentTime)
 
 	}
 }
@@ -258,20 +260,24 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	port = flag.String("p", "8080", "Specify the port to listen on")
-	delable = flag.Bool("d", false, "Enable delete file by UI") //golang处理bool参数的方式是穿了就是true，没传就是false
-	store = flag.String("s", "./store", "Specify the directory to store files")
-	flag.Parse()
-	fmt.Printf("delable : %t\n", *delable)
-	fmt.Printf("store : %s\n", *store)
-	fmt.Printf("port : %s\n", *port)
 
 	hn, err := os.Hostname()
 	if err != nil {
 		fmt.Println("Error getting hostname:", err)
 		return
 	}
-	hostname = &hn
+
+	port = flag.String("p", "8080", "Specify the port to listen on")
+	delable = flag.Bool("d", false, "Enable delete file by UI") //golang处理bool参数的方式是穿了就是true，没传就是false
+	store = flag.String("s", "./store", "Specify the directory to store files")
+	//hostname = &hn
+	hostname = flag.String("n", hn, "Specify the server name, default hostname")
+
+	flag.Parse()
+	fmt.Printf("delable : %t\n", *delable)
+	fmt.Printf("store : %s\n", *store)
+	fmt.Printf("port : %s\n", *port)
+	fmt.Printf("host : %s\n", *hostname)
 
 	err = checkAndCreateDir(*store)
 	if err != nil {
