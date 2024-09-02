@@ -96,7 +96,7 @@ document.getElementById("uploadForm").onsubmit = function() {
             <h1>Uploaded file successfully !</h1>
             <p>Uploaded file: %s, </p><p>Size: %d bytes, </p><p>Time: %s</p>
             <p><a href="/files">Go to File List</a></p>
-            </body></html>\n`, filename, size, currentTime)
+            </body></html>`, filename, size, currentTime)
 
 	}
 }
@@ -136,6 +136,8 @@ function delFile(file) {
 
 		fmt.Fprintf(w, `<table border="1px">
             <tr><td>Download Link</td>
+            <td>Size</td>
+            <td>ModifyTime</td>
             <td>CURL</td>
             <!--td>Copy</td-->`) //如果Server端没证书未开启Https，不允许通过JS操作剪贴板
 
@@ -153,8 +155,10 @@ function delFile(file) {
 				downloadURL := fmt.Sprintf("%s/download?file=%s", getURLRoot(), fileName)
 				fmt.Fprintf(w, `<tr>
                     <td><a href="%s">%s</a></td>
+                    <td>%s</td>
+                    <td>%s</td>
                     <td><code>curl -L -o '%s' '%s'</code></td>
-                    <!--td><button onclick="copyToClipboard('curl -L -o \'%s\' \'%s\'')">Copy</button></td-->`, downloadURL, fileName, fileName, downloadURL, fileName, downloadURL)
+                    <!--td><button onclick="copyToClipboard('curl -L -o \'%s\' \'%s\'')">Copy</button></td-->`, downloadURL, fileName, humanReadableSize(file.Size()), file.ModTime().Format("2006-01-02 15:04:05"), fileName, downloadURL, fileName, downloadURL)
 				if *delable {
 					fmt.Fprintf(w, `<td><button onclick="delFile('%s')">Delete</button></td>`, fileName)
 				}
@@ -317,4 +321,18 @@ func checkAndCreateDir(dir string) error {
 		fmt.Printf("Directory already exists: %s\n", dir)
 	}
 	return nil
+}
+
+// humanReadableSize 将字节大小转换为更友好的格式
+func humanReadableSize(size int64) string {
+	const unit = 1024
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
+	}
+	div, exp := int64(unit), 0
+	for n := size / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
 }
