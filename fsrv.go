@@ -168,9 +168,9 @@ function delFile(file) {
 
 		if empty {
 			if *delable {
-				fmt.Fprintf(w, `<tr><td colspan=3>This file store is empty, you can upload something now.</td></tr>`)
+				fmt.Fprintf(w, `<tr><td colspan=5>This file store is empty, you can upload something now.</td></tr>`)
 			} else {
-				fmt.Fprintf(w, `<tr><td colspan=2>This file store is empty, you can upload something now.</td></tr>`)
+				fmt.Fprintf(w, `<tr><td colspan=4>This file store is empty, you can upload something now.</td></tr>`)
 			}
 		}
 
