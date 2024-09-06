@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -116,6 +117,10 @@ func listFiles(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Failed to read directory: %v", err)
 			return
 		}
+
+		sort.Slice(files, func(i, j int) bool {
+			return files[i].ModTime().After(files[j].ModTime())
+		})
 
 		fmt.Fprintf(w, `<html><head><title>FSrv</title><script>
 function copyToClipboard(text) {
