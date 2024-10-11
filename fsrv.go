@@ -15,10 +15,11 @@ var port *string
 var delable *bool
 var hostname *string
 var store *string
+var max *int64
 
-func uploadFile(w http.ResponseWriter, r *http.Request) {
+func uploadPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
-
+		maxSize := humanReadableSize(1 << (*max))
 		fmt.Fprintf(w, `<html><head><title>FSrv</title></head><body><h1>Upload File</h1>`)
 
 		// 添加一个跳转到文件列表页面的链接
@@ -31,6 +32,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
     <input type="file" name="file" id="fileInput" text="SelectFile">
     <input type="submit" value="Upload" text="Upload">
 </form>
+<p>Attention : Max upload file size is `+maxSize+`.</p>
 
 <script>
 document.getElementById("uploadForm").onsubmit = function() {
@@ -46,11 +48,16 @@ document.getElementById("uploadForm").onsubmit = function() {
 </html>`)
 		return
 	}
+}
+
+func uploadFile(w http.ResponseWriter, r *http.Request) {
+	// 限制文件大小为 4GB
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<(*max)) // 1<<32 表示 4GB
 
 	if r.Method == "POST" {
 		file, header, err := r.FormFile("file")
 		if err != nil {
-			fmt.Fprintf(w, "No file selected for upload")
+			fmt.Fprintf(w, "No file selected for upload or file is too large")
 			return
 		}
 		defer file.Close()
@@ -60,7 +67,7 @@ document.getElementById("uploadForm").onsubmit = function() {
 
 		if _, err := os.Stat(fullPath); err == nil {
 			fmt.Fprintf(w, `<html><body>
-                <h1>File uploaded faild!</h1>
+                <h1>File upload failed!</h1>
                 <p>File already exists: %s</p>
                 <p><a href="/files">Go to File List</a></p>
                 </body></html>`, filename)
@@ -70,7 +77,7 @@ document.getElementById("uploadForm").onsubmit = function() {
 		dst, err := os.Create(fullPath)
 		if err != nil {
 			fmt.Fprintf(w, `<html><body>
-                <h1>File uploaded faild!</h1>
+                <h1>File upload failed!</h1>
                 <p>Failed to save file: %v</p>
                 <p><a href="/files">Go to File List</a></p>
                 </body></html>`, err)
@@ -79,10 +86,13 @@ document.getElementById("uploadForm").onsubmit = function() {
 		}
 		defer dst.Close()
 
-		size, err := io.Copy(dst, file)
+		// 使用缓冲区分块读取和写入，避免一次性加载大文件
+		buffer := make([]byte, 1024*1024) // 1MB 缓冲区
+		size, err := io.CopyBuffer(dst, file, buffer)
+
 		if err != nil {
 			fmt.Fprintf(w, `<html><body>
-                <h1>File uploaded faild!</h1>
+                <h1>File upload failed!</h1>
                 <p>Failed to save file: %v</p>
                 <p><a href="/files">Go to File List</a></p>
                 </body></html>`, err)
@@ -137,7 +147,7 @@ function delFile(file) {
 </script></head><body><h1>File List</h1>`)
 
 		// 添加一个跳转到上传页面的链接
-		fmt.Fprintf(w, `<p><a href="/upload">Go to Upload Page</a></p>`)
+		fmt.Fprintf(w, `<p><a href="/toUpload">Go to Upload Page</a></p>`)
 
 		fmt.Fprintf(w, `<table border="1px">
             <tr><td>Download Link</td>
@@ -281,6 +291,7 @@ func main() {
 	store = flag.String("s", "./store", "Specify the directory to store files")
 	//hostname = &hn
 	hostname = flag.String("n", hn, "Specify the server name, default hostname")
+	max = flag.Int64("m", 32, "Max file size to upload, default 32(1<<32=4GB)")
 
 	flag.Parse()
 	fmt.Printf("delable : %t\n", *delable)
@@ -294,6 +305,7 @@ func main() {
 		return
 	}
 
+	http.HandleFunc("/toUpload", uploadPage)
 	http.HandleFunc("/upload", uploadFile)
 	http.HandleFunc("/files", listFiles)
 	http.HandleFunc("/", listFiles)
