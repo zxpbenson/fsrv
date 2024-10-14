@@ -3,7 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,228 +13,326 @@ import (
 	"time"
 )
 
-var port *string
-var delable *bool
-var hostname *string
-var store *string
-var max *int64
-
-func uploadPage(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-		maxSize := humanReadableSize(1 << (*max))
-		fmt.Fprintf(w, `<html><head><title>FSrv</title></head><body><h1>Upload File</h1>`)
-
-		// 添加一个跳转到文件列表页面的链接
-		fmt.Fprintf(w, `<p><a href="/files">Go to File List Page</a></p>`)
-
-		fmt.Fprintf(w, `<p>U can upload file by curl : </p><p>curl -F 'file=@/path/file' http://%s:%s/upload</p><p>or:</p>`, *hostname, *port)
-
-		fmt.Fprintf(w, `
-<form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
-    <input type="file" name="file" id="fileInput" text="SelectFile">
-    <input type="submit" value="Upload" text="Upload">
-</form>
-<p>Attention : Max upload file size is `+maxSize+`.</p>
-
-<script>
-document.getElementById("uploadForm").onsubmit = function() {
-    var fileInput = document.getElementById("fileInput");
-    if (fileInput.files.length === 0) {
-        alert("Please select a file to upload.");
-        return false; // 阻止表单提交
-    }
-    return true; // 允许表单提交
+type FsrvCfg struct {
+	Port     *string
+	DelAble  *bool
+	Hostname *string
+	Store    *string
+	Max      *int64
 }
-</script>
-</body>
-</html>`)
+
+func (cfg *FsrvCfg) parseArgs() bool {
+	hn, err := os.Hostname()
+	if err != nil {
+		fmt.Println("Error getting hostname:", err)
+		return false
+	}
+
+	fsrvCfg.Port = flag.String("p", "8080", "Specify the port to listen on")
+	fsrvCfg.DelAble = flag.Bool("d", false, "Enable delete file by UI") //golang处理bool参数的方式是穿了就是true，没传就是false
+	fsrvCfg.Store = flag.String("s", "./store", "Specify the directory to store files")
+	//hostname = &hn
+	fsrvCfg.Hostname = flag.String("n", hn, "Specify the server name, default hostname")
+	fsrvCfg.Max = flag.Int64("m", 32, "Max file size to upload, default 32(1<<32=4GB)")
+
+	flag.Parse()
+	fmt.Printf("delable : %t\n", *fsrvCfg.DelAble)
+	fmt.Printf("store : %s\n", *fsrvCfg.Store)
+	fmt.Printf("port : %s\n", *fsrvCfg.Port)
+	fmt.Printf("host : %s\n", *fsrvCfg.Hostname)
+	return true
+}
+
+var fsrvCfg *FsrvCfg = &FsrvCfg{}
+
+type UploadFile struct {
+	DownloadLink string
+	Filename     string
+	Size         string
+	ModifyTime   string
+	Curl         string
+}
+
+type FsrvPageParam struct {
+	Title   string
+	Msgs    []string
+	Param1  string
+	Param2  string
+	Param3  string
+	Param4  string
+	Param5  string
+	Files   []UploadFile
+	Empty   bool
+	DelAble bool
+}
+
+func NewPageParam() *FsrvPageParam {
+	return &FsrvPageParam{Title: `FSrv`, Files: make([]UploadFile, 0)}
+}
+
+type HTML string
+
+func (html HTML) renderHtml(param *FsrvPageParam, w http.ResponseWriter) {
+	// 解析并渲染模板
+	t, err := template.New(param.Title).Parse(string(html))
+	if err != nil {
+		log.Println("Error parsing template:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+
+	err = t.Execute(w, param)
+	if err != nil {
+		log.Println("Error executing template:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+const filesHtml HTML = `
+<html>
+  <head>
+    <title>{{.Title}}</title>
+  <script>
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(function() {
+        alert('Copied to clipboard!');
+      }, function(err) {
+        alert('Failed to copy: ' + err);
+      });
+    }
+    function delFile(file) {
+      window.location.href='/del?file='+file;
+    }
+  </script>
+  </head>
+  <body>
+    <h1>File List</h1>
+    <p><a href="/toUpload">Go to Upload Page</a></p>
+    <table border="1px">
+      <thead>
+        <tr>
+          <td>Download Link</td>
+          <td>Size</td>
+          <td>ModifyTime</td>
+          <td>CURL</td>
+          <!--td>Copy</td-->
+          {{if .DelAble}}
+          <td>Delete</td>
+          {{end}}
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Files}}
+        <tr>
+          <td><a href="{{.DownloadLink}}">{{.Filename}}</a></td>
+          <td>{{.Size}}</td>
+          <td>{{.ModifyTime}}</td>
+          <td><code>curl -L -o '{{.Filename}}' '{{.DownloadLink}}'</code></td>
+          <!--td><button onclick="copyToClipboard('curl -L -o \'{{.Filename}}\' \'{{.DownloadLink}}\'')">Copy</button></td-->
+          {{if $.DelAble}}
+          <td><button onclick="delFile('{{.Filename}}')">Delete</button></td>
+          {{end}}
+        </tr>
+        {{end}}
+        {{if .Empty}}
+        {{if .DelAble}}
+        <tr><td colspan=5>This file store is empty, you can upload something now.</td></tr>
+        {{else}}
+        <tr><td colspan=4>This file store is empty, you can upload something now.</td></tr>
+        {{end}}
+        {{end}}
+      </tbody>
+    </table>
+  </body>
+</html>
+`
+
+const infoHtml HTML = `
+<html>
+  <head>
+    <title>{{.Title}}</title>
+  </head>
+  <body>
+    <h1>Attention !</h1>
+    {{range .Msgs}}
+    <p>{{.}}</p>
+    {{end}}
+    <p><a href="/files">Go to File List Page</a></p>
+    <p><a href="/toUpload">Go to Upload Page</a></p>
+  </body>
+</html>
+`
+
+const uploadHtml HTML = `
+<html>
+  <head>
+    <title>{{.Title}}</title>
+  </head>
+  <body>
+    <h1>Upload File</h1>
+    <p><a href="/files">Go to File List Page</a></p>
+    <p>U can upload file by curl : </p><p>curl -F 'file=@/path/file' http://{{.Param1}}:{{.Param2}}/upload</p><p>or:</p>
+    <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
+      <input type="file" name="file" id="fileInput" text="SelectFile">
+      <input type="submit" value="Upload" text="Upload">
+    </form>
+    <p>Attention : Max upload file size is {{.Param3}}.</p>
+    <script>
+    document.getElementById("uploadForm").onsubmit = function() {
+      var fileInput = document.getElementById("fileInput");
+      if (fileInput.files.length === 0) {
+        alert("Please select a file to upload.");
+        return false; // 阻止表单提交
+      }
+      return true; // 允许表单提交
+    }
+    </script>
+  </body>
+</html>
+`
+
+func uploadPage(w http.ResponseWriter, r *http.Request) {
+	if !checkMethod(w, r, "GET") {
+		return
+	}
+	maxSize := humanReadableSize(1 << (*fsrvCfg.Max))
+	param := NewPageParam()
+	param.Param1 = *fsrvCfg.Hostname
+	param.Param2 = *fsrvCfg.Port
+	param.Param3 = maxSize
+	uploadHtml.renderHtml(param, w)
 }
 
 func uploadFile(w http.ResponseWriter, r *http.Request) {
-	// 限制文件大小为 4GB
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<(*max)) // 1<<32 表示 4GB
-
-	if r.Method == "POST" {
-		file, header, err := r.FormFile("file")
-		if err != nil {
-			fmt.Fprintf(w, "No file selected for upload or file is too large")
-			return
-		}
-		defer file.Close()
-
-		filename := filepath.Base(header.Filename)
-		fullPath := filepath.Join(*store, filename)
-
-		if _, err := os.Stat(fullPath); err == nil {
-			fmt.Fprintf(w, `<html><body>
-                <h1>File upload failed!</h1>
-                <p>File already exists: %s</p>
-                <p><a href="/files">Go to File List</a></p>
-                </body></html>`, filename)
-			return
-		}
-
-		dst, err := os.Create(fullPath)
-		if err != nil {
-			fmt.Fprintf(w, `<html><body>
-                <h1>File upload failed!</h1>
-                <p>Failed to save file: %v</p>
-                <p><a href="/files">Go to File List</a></p>
-                </body></html>`, err)
-
-			return
-		}
-		defer dst.Close()
-
-		// 使用缓冲区分块读取和写入，避免一次性加载大文件
-		buffer := make([]byte, 1024*1024) // 1MB 缓冲区
-		size, err := io.CopyBuffer(dst, file, buffer)
-
-		if err != nil {
-			fmt.Fprintf(w, `<html><body>
-                <h1>File upload failed!</h1>
-                <p>Failed to save file: %v</p>
-                <p><a href="/files">Go to File List</a></p>
-                </body></html>`, err)
-			return
-		}
-
-		currentTime := time.Now().Format("2006-01-02 15:04:05")
-		fmt.Printf("Uploaded file successfully : %s, Size: %d bytes, Time: %s\n", filename, size, currentTime)
-
-		// 上传成功后的页面内容
-		fmt.Fprintf(w, `<html><body>
-            <h1>Uploaded file successfully !</h1>
-            <p>Uploaded file: %s, </p><p>Size: %d bytes, </p><p>Time: %s</p>
-            <p><a href="/files">Go to File List</a></p>
-            </body></html>`, filename, size, currentTime)
-
+	if !checkMethod(w, r, "POST") {
+		return
 	}
+
+	// 限制文件大小为 4GB
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<(*fsrvCfg.Max)) // 1<<32 表示 4GB
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		htmlInfo(w, `No file selected for upload or file is too large`)
+		return
+	}
+	defer file.Close()
+
+	filename := filepath.Base(header.Filename)
+	fullPath := filepath.Join(*fsrvCfg.Store, filename)
+
+	if _, err := os.Stat(fullPath); err == nil {
+		htmlInfos(w, []string{`File upload failed!`,
+			fmt.Sprintf(`File already exists : '%s'`, filename)})
+		return
+	}
+
+	dst, err := os.Create(fullPath)
+	if err != nil {
+		htmlInfos(w, []string{`File upload failed!`,
+			fmt.Sprintf(`Failed to save file : '%v'`, err)})
+		return
+	}
+
+	defer dst.Close()
+	// 使用缓冲区分块读取和写入，避免一次性加载大文件
+	buffer := make([]byte, 1024*1024) // 1MB 缓冲区
+	size, err := io.CopyBuffer(dst, file, buffer)
+	if err != nil {
+		htmlInfos(w, []string{`File upload failed!`,
+			fmt.Sprintf(`Failed to save file : '%v'`, err)})
+		return
+	}
+
+	humanSize := humanReadableSize(size)
+	//记个日志
+	currentTime := time.Now().Format("2006-01-02 15:04:05")
+	// 上传成功后的页面内容
+	htmlInfos(w, []string{
+		`Uploaded file successfully !`,
+		fmt.Sprintf(`Uploaded file : %s`, filename),
+		fmt.Sprintf(`Size : %s`, humanSize),
+		fmt.Sprintf(`Time : %s`, currentTime)})
+}
+
+func (param *FsrvPageParam) loadFileInfo(files []os.FileInfo) {
+	empty := true
+	for _, file := range files {
+		if !file.IsDir() {
+			empty = false
+			uploadFile := UploadFile{}
+			fileName := file.Name()
+			downloadURL := fmt.Sprintf("%s/download?file=%s", getURLRoot(), fileName)
+			uploadFile.DownloadLink = downloadURL
+			uploadFile.Filename = fileName
+			uploadFile.Size = humanReadableSize(file.Size())
+			uploadFile.ModifyTime = file.ModTime().Format("2006-01-02 15:04:05")
+			param.Files = append(param.Files, uploadFile)
+		}
+	}
+	param.Empty = empty
 }
 
 func listFiles(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-
-		dir, err := os.Open(*store)
-		if err != nil {
-			fmt.Fprintf(w, "Failed to open directory: %v", err)
-			return
-		}
-		defer dir.Close()
-
-		files, err := dir.Readdir(-1)
-		if err != nil {
-			fmt.Fprintf(w, "Failed to read directory: %v", err)
-			return
-		}
-
-		sort.Slice(files, func(i, j int) bool {
-			return files[i].ModTime().After(files[j].ModTime())
-		})
-
-		fmt.Fprintf(w, `<html><head><title>FSrv</title><script>
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(function() {
-        alert('Copied to clipboard!');
-    }, function(err) {
-        alert('Failed to copy: ' + err);
-    });
-}
-function delFile(file) {
-    window.location.href='/del?file='+file;
-}
-
-</script></head><body><h1>File List</h1>`)
-
-		// 添加一个跳转到上传页面的链接
-		fmt.Fprintf(w, `<p><a href="/toUpload">Go to Upload Page</a></p>`)
-
-		fmt.Fprintf(w, `<table border="1px">
-            <tr><td>Download Link</td>
-            <td>Size</td>
-            <td>ModifyTime</td>
-            <td>CURL</td>
-            <!--td>Copy</td-->`) //如果Server端没证书未开启Https，不允许通过JS操作剪贴板
-
-		if *delable {
-			fmt.Fprintf(w, `<td>Delete</td>`)
-		}
-
-		fmt.Fprintf(w, `</tr>`)
-
-		empty := true
-		for _, file := range files {
-			if !file.IsDir() {
-				empty = false
-				fileName := file.Name()
-				downloadURL := fmt.Sprintf("%s/download?file=%s", getURLRoot(), fileName)
-				fmt.Fprintf(w, `<tr>
-                    <td><a href="%s">%s</a></td>
-                    <td>%s</td>
-                    <td>%s</td>
-                    <td><code>curl -L -o '%s' '%s'</code></td>
-                    <!--td><button onclick="copyToClipboard('curl -L -o \'%s\' \'%s\'')">Copy</button></td-->`, downloadURL, fileName, humanReadableSize(file.Size()), file.ModTime().Format("2006-01-02 15:04:05"), fileName, downloadURL, fileName, downloadURL)
-				if *delable {
-					fmt.Fprintf(w, `<td><button onclick="delFile('%s')">Delete</button></td>`, fileName)
-				}
-				fmt.Fprintf(w, `</tr>`)
-			}
-		}
-
-		if empty {
-			if *delable {
-				fmt.Fprintf(w, `<tr><td colspan=5>This file store is empty, you can upload something now.</td></tr>`)
-			} else {
-				fmt.Fprintf(w, `<tr><td colspan=4>This file store is empty, you can upload something now.</td></tr>`)
-			}
-		}
-
-		fmt.Fprintf(w, `</table></body></html>`)
+	if !checkMethod(w, r, "GET") {
+		return
 	}
-}
 
-func getPort() string {
-	return *port
-}
+	dir, err := os.Open(*fsrvCfg.Store)
+	if err != nil {
+		htmlInfo(w, fmt.Sprintf(`Failed to open directory : '%v'`, err))
+		return
+	}
 
-func getURLRoot() string {
-	return fmt.Sprintf("http://%s:%s", *hostname, *port)
+	defer dir.Close()
+	files, err := dir.Readdir(-1)
+	if err != nil {
+		htmlInfo(w, fmt.Sprintf(`Failed to read directory : '%v'`, err))
+		return
+	}
+
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ModTime().After(files[j].ModTime())
+	})
+
+	param := NewPageParam()
+	param.loadFileInfo(files)
+	param.DelAble = *fsrvCfg.DelAble
+	filesHtml.renderHtml(param, w)
 }
 
 func deleteFile(w http.ResponseWriter, r *http.Request) {
+
+	if !checkMethod(w, r, "GET") {
+		return
+	}
+
 	filename := r.URL.Query().Get("file")
 	filename = filepath.Base(filename)
-	filePath := filepath.Join(*store, filename)
-
-	fmt.Fprintf(w, `<html><head><title>FSrv</title></head><body><h1>Delete File</h1>`)
-
-	// 添加一个跳转到上传页面的链接
-	fmt.Fprintf(w, `<p><a href="/files">Go to File List Page</a></p>`)
+	filePath := filepath.Join(*fsrvCfg.Store, filename)
 
 	//校验文件是否存在
 	info, err := os.Stat(filePath)
 	if os.IsNotExist(err) {
-		http.Error(w, fmt.Sprintf("<p>File does not exist: %s<p></body></html>", filename), http.StatusNotFound)
+		htmlInfo(w, fmt.Sprintf(`File does not exist : '%s'`, filename))
 		return
 	}
 	//删除的不能是目录
 	if info.IsDir() {
-		http.Error(w, fmt.Sprintf("<p>Cannot delete directory: %s<p></body></html>", filename), http.StatusNotFound)
+		htmlInfo(w, fmt.Sprintf(`Cannot delete directory : '%s'`, filename))
 		return
 	}
 
-	dir, err := os.Open(*store)
+	dir, err := os.Open(*fsrvCfg.Store)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("<p>Failed to open directory: %v<p></body></html>", err), http.StatusInternalServerError)
+		htmlInfo(w, fmt.Sprintf(`Failed to open directory : '%v'`, err))
 		return
 	}
-	defer dir.Close()
 
+	defer dir.Close()
 	files, err := dir.Readdir(-1)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("<p>Failed to read directory: %v<p></body></html>", err), http.StatusInternalServerError)
+		htmlInfo(w, fmt.Sprintf(`Failed to read directory : '%v'`, err))
 		return
 	}
 
@@ -240,11 +340,11 @@ func deleteFile(w http.ResponseWriter, r *http.Request) {
 		if filename == file.Name() {
 			err = os.Remove(filePath)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("<p>Failed to delete file: %s<p></body></html>", filename), http.StatusInternalServerError)
+				htmlInfo(w, fmt.Sprintf(`Failed to delete file : '%s', error : %v`, filename, err))
 				return
 			} else {
-				fmt.Fprintf(w, `<p>Deleted file successfully : %s</p></body></html>`, filename)
 				fmt.Printf("Deleted file successfully : %s\n", filePath)
+				htmlInfo(w, fmt.Sprintf(`Deleted file successfully : '%s'`, filename))
 				return
 			}
 		}
@@ -252,54 +352,43 @@ func deleteFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func downloadFile(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-		filename := r.URL.Query().Get("file")
-		filename = filepath.Base(filename)
-		filePath := filepath.Join(*store, filename)
-
-		//校验文件是否存在
-		info, err := os.Stat(filePath)
-		if os.IsNotExist(err) {
-			http.Error(w, fmt.Sprintf("<html><head><title>FSrv</title></head><body><h1>Download File</h1><p>File does not exist: %s<p></body></html>", filename), http.StatusNotFound)
-			return
-		}
-		//删除的不能是目录
-		if info.IsDir() {
-			http.Error(w, fmt.Sprintf("<html><head><title>FSrv</title></head><body><h1>Download File</h1><p>Cannot download directory: %s<p></body></html>", filename), http.StatusNotFound)
-			return
-		}
-
-		// 设置响应头，提示浏览器下载文件
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-		w.Header().Set("Content-Type", "application/octet-stream")
-
-		http.ServeFile(w, r, filePath)
-		fmt.Printf("Download file successfully : %s\n", filename)
+	if !checkMethod(w, r, "GET") {
+		return
 	}
+
+	filename := r.URL.Query().Get("file")
+	filename = filepath.Base(filename)
+	filePath := filepath.Join(*fsrvCfg.Store, filename)
+
+	//校验文件是否存在
+	info, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		htmlInfo(w, fmt.Sprintf(`File does not exist : '%s'`, filename))
+		return
+	}
+
+	//下载的不能是目录
+	if info.IsDir() {
+		htmlInfo(w, fmt.Sprintf(`Cannot download directory : '%s'`, filename))
+		return
+	}
+
+	// 设置响应头，提示浏览器下载文件
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Content-Type", "application/octet-stream")
+	http.ServeFile(w, r, filePath)
+
+	//下载成功记日志
+	fmt.Printf("Download file successfully : %s\n", filename)
 }
 
 func main() {
 
-	hn, err := os.Hostname()
-	if err != nil {
-		fmt.Println("Error getting hostname:", err)
+	if !fsrvCfg.parseArgs() {
 		return
 	}
 
-	port = flag.String("p", "8080", "Specify the port to listen on")
-	delable = flag.Bool("d", false, "Enable delete file by UI") //golang处理bool参数的方式是穿了就是true，没传就是false
-	store = flag.String("s", "./store", "Specify the directory to store files")
-	//hostname = &hn
-	hostname = flag.String("n", hn, "Specify the server name, default hostname")
-	max = flag.Int64("m", 32, "Max file size to upload, default 32(1<<32=4GB)")
-
-	flag.Parse()
-	fmt.Printf("delable : %t\n", *delable)
-	fmt.Printf("store : %s\n", *store)
-	fmt.Printf("port : %s\n", *port)
-	fmt.Printf("host : %s\n", *hostname)
-
-	err = checkAndCreateDir(*store)
+	err := checkAndCreateDir(*fsrvCfg.Store)
 	if err != nil {
 		fmt.Println("Error creating store dir:", err)
 		return
@@ -312,12 +401,36 @@ func main() {
 	http.HandleFunc("/download", downloadFile)
 	http.HandleFunc("/del", deleteFile)
 
-	addr := fmt.Sprintf(":%s", *port)
+	addr := fmt.Sprintf(":%s", *fsrvCfg.Port)
 	fmt.Printf("Server started on %s\n", addr)
 
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		fmt.Println("Failed to start server:", err)
 	}
+}
+
+func htmlInfo(w http.ResponseWriter, msg string) {
+	param := NewPageParam()
+	param.Msgs = []string{msg}
+	infoHtml.renderHtml(param, w)
+}
+
+func htmlInfos(w http.ResponseWriter, msgs []string) {
+	param := NewPageParam()
+	param.Msgs = msgs
+	infoHtml.renderHtml(param, w)
+}
+
+func checkMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+	if r.Method != method {
+		htmlInfo(w, fmt.Sprintf(`Http Method should be '%s'`, method))
+		return false
+	}
+	return true
+}
+
+func getURLRoot() string {
+	return fmt.Sprintf("http://%s:%s", *fsrvCfg.Hostname, *fsrvCfg.Port)
 }
 
 // checkAndCreateDir 检查指定目录是否存在，如果不存在则创建
