@@ -222,15 +222,15 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	fullPath := filepath.Join(*fsrvCfg.Store, filename)
 
 	if _, err := os.Stat(fullPath); err == nil {
-		htmlInfos(w, []string{`File upload failed!`,
-			fmt.Sprintf(`File already exists : '%s'`, filename)})
+		htmlInfo(w, `File upload failed!`,
+			fmt.Sprintf(`File already exists : '%s'`, filename))
 		return
 	}
 
 	dst, err := os.Create(fullPath)
 	if err != nil {
-		htmlInfos(w, []string{`File upload failed!`,
-			fmt.Sprintf(`Failed to save file : '%v'`, err)})
+		htmlInfo(w, `File upload failed!`,
+			fmt.Sprintf(`Failed to save file : '%v'`, err))
 		return
 	}
 
@@ -239,8 +239,8 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	buffer := make([]byte, 1024*1024) // 1MB 缓冲区
 	size, err := io.CopyBuffer(dst, file, buffer)
 	if err != nil {
-		htmlInfos(w, []string{`File upload failed!`,
-			fmt.Sprintf(`Failed to save file : '%v'`, err)})
+		htmlInfo(w, `File upload failed!`,
+			fmt.Sprintf(`Failed to save file : '%v'`, err))
 		return
 	}
 
@@ -248,11 +248,11 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	//记个日志
 	currentTime := time.Now().Format("2006-01-02 15:04:05")
 	// 上传成功后的页面内容
-	htmlInfos(w, []string{
+	htmlInfo(w,
 		`Uploaded file successfully !`,
 		fmt.Sprintf(`Uploaded file : %s`, filename),
 		fmt.Sprintf(`Size : %s`, humanSize),
-		fmt.Sprintf(`Time : %s`, currentTime)})
+		fmt.Sprintf(`Time : %s`, currentTime))
 }
 
 func (param *FsrvPageParam) loadFileInfo(files []os.FileInfo) {
@@ -409,15 +409,9 @@ func main() {
 	}
 }
 
-func htmlInfo(w http.ResponseWriter, msg string) {
+func htmlInfo(w http.ResponseWriter, msg ...string) {
 	param := NewPageParam()
-	param.Msgs = []string{msg}
-	infoHtml.renderHtml(param, w)
-}
-
-func htmlInfos(w http.ResponseWriter, msgs []string) {
-	param := NewPageParam()
-	param.Msgs = msgs
+	param.Msgs = msg
 	infoHtml.renderHtml(param, w)
 }
 
