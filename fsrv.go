@@ -40,6 +40,7 @@ func (cfg *FsrvCfg) parseArgs() bool {
 	fmt.Printf("store : %s\n", *fsrvCfg.Store)
 	fmt.Printf("port : %s\n", *fsrvCfg.Port)
 	fmt.Printf("host : %s\n", *fsrvCfg.Hostname)
+	fmt.Printf("max : %d -> %s\n", *fsrvCfg.Max, humanReadableSize(1<<*fsrvCfg.Max))
 	return true
 }
 
