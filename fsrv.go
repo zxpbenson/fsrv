@@ -215,6 +215,7 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		htmlInfo(w, `No file selected for upload or file is too large`)
+		fmt.Println("Failed to upload file : ", err)
 		return
 	}
 	defer file.Close()
@@ -383,6 +384,18 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Download file successfully : %s\n", filename)
 }
 
+func prepareTmpDir() (string, error) {
+	executablePath, err := os.Executable()
+	if err != nil {
+		//fmt.Println("Error:", err)
+		return "", err
+	}
+	fmt.Println("Current executable path:", executablePath)
+	tmpDir := filepath.Dir(executablePath) + "/tmp"
+	fmt.Println("Current tmp dir path:", tmpDir)
+	return tmpDir, checkAndCreateDir(tmpDir)
+}
+
 func main() {
 
 	if !fsrvCfg.parseArgs() {
@@ -394,6 +407,13 @@ func main() {
 		fmt.Println("Error creating store dir:", err)
 		return
 	}
+	tmpDir, err := prepareTmpDir()
+	if err != nil {
+		fmt.Println("Error creating tmp dir:", err)
+		return
+	}
+	//因为默认临时文件目录是 /tmp/xxx/xxx 大小有限，当文件超过2G一般临时空间就不足了，所以显式指定临时目录
+	os.Setenv("TMPDIR", tmpDir)
 
 	http.HandleFunc("/toUpload", uploadPage)
 	http.HandleFunc("/upload", uploadFile)
