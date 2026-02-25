@@ -163,18 +163,30 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filename := r.URL.Query().Get("file")
-	filePath, err := h.svc.GetFilePath(filename)
+	
+	// Open file safely using service
+	file, err := h.svc.OpenFile(filename)
 	if err != nil {
 		h.renderInfo(w, err.Error())
+		return
+	}
+	defer file.Close()
+
+	// Get file info for ServeContent
+	fileInfo, err := file.Stat()
+	if err != nil {
+		h.renderInfo(w, "Failed to get file info: "+err.Error())
 		return
 	}
 
 	// Set response headers for file download
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	w.Header().Set("Content-Type", "application/octet-stream")
-
-	// Serve the file
-	http.ServeFile(w, r, filePath)
+	
+	// Serve the file content
+	// Note: We use ServeContent instead of ServeFile because we already hold the open file handle.
+	// This ensures that we are serving the exact file we opened under the protection of the service lock.
+	http.ServeContent(w, r, filename, fileInfo.ModTime(), file)
 
 	log.Printf("Downloaded file successfully: %s", filename)
 }

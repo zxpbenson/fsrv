@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"fsrv/internal/config"
@@ -24,6 +25,7 @@ type File struct {
 // Service handles file operations
 type Service struct {
 	cfg *config.Config
+	mu  sync.RWMutex
 }
 
 // New creates a new file service
@@ -33,6 +35,9 @@ func New(cfg *config.Config) *Service {
 
 // ListFiles returns a list of all files in the store directory
 func (s *Service) ListFiles() ([]File, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	dir, err := os.Open(s.cfg.Store)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open directory: %w", err)
@@ -70,6 +75,9 @@ func (s *Service) ListFiles() ([]File, error) {
 
 // UploadFile saves an uploaded file to the store directory
 func (s *Service) UploadFile(filename string, src io.Reader) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	safeFilename := util.SafeFileName(filename)
 	fullPath := filepath.Join(s.cfg.Store, safeFilename)
 
@@ -97,6 +105,9 @@ func (s *Service) UploadFile(filename string, src io.Reader) (int64, error) {
 
 // DeleteFile removes a file from the store directory
 func (s *Service) DeleteFile(filename string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	safeFilename := util.SafeFileName(filename)
 	filePath := filepath.Join(s.cfg.Store, safeFilename)
 
@@ -122,26 +133,46 @@ func (s *Service) DeleteFile(filename string) error {
 	return nil
 }
 
-// GetFilePath returns the full path of a file
-func (s *Service) GetFilePath(filename string) (string, error) {
+// OpenFile safely opens a file for reading under a read lock.
+//
+// Concurrency Safety Note:
+// This method uses a read lock (RLock) to protect the file opening process.
+// Once the file is successfully opened and the handle (*os.File) is returned,
+// the lock is released. This is safe because:
+// 1. On Unix-like systems, an open file handle remains valid even if the underlying
+//    directory entry is removed (e.g., via DeleteFile). The data can still be read fully.
+// 2. On Windows, the OS prevents deleting a file that is currently open. DeleteFile
+//    will fail, effectively protecting the ongoing download.
+// This design minimizes lock contention by only holding the lock during the Open operation,
+// avoiding blocking other operations (like Upload/Delete) during long downloads.
+func (s *Service) OpenFile(filename string) (*os.File, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	safeFilename := util.SafeFileName(filename)
 	filePath := filepath.Join(s.cfg.Store, safeFilename)
 
 	// Check if file exists
 	info, err := os.Stat(filePath)
 	if os.IsNotExist(err) {
-		return "", fmt.Errorf("file does not exist: '%s'", safeFilename)
+		return nil, fmt.Errorf("file does not exist: '%s'", safeFilename)
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to check file: %w", err)
+		return nil, fmt.Errorf("failed to check file: %w", err)
 	}
 
 	// Cannot download directories
 	if info.IsDir() {
-		return "", fmt.Errorf("cannot download directory: '%s'", safeFilename)
+		return nil, fmt.Errorf("cannot download directory: '%s'", safeFilename)
 	}
 
-	return filePath, nil
+	// Open the file while holding the read lock
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+
+	return file, nil
 }
 
 // GetMaxUploadSize returns the maximum upload size in bytes
