@@ -1,0 +1,105 @@
+.PHONY: all build clean test test-coverage benchmark lint fmt vet run help install
+
+# Binary name
+BINARY_NAME=fsrv
+
+# Build directory
+BUILD_DIR=build
+
+# Go parameters
+GOCMD=go
+GOBUILD=$(GOCMD) build
+GOCLEAN=$(GOCMD) clean
+GOTEST=$(GOCMD) test
+GOGET=$(GOCMD) get
+GOMOD=$(GOCMD) mod
+GOFMT=gofmt
+GOVET=$(GOCMD) vet
+
+# Main package path
+MAIN_PATH=./cmd/fsrv
+
+# Test coverage output
+COVERAGE_FILE=coverage.out
+COVERAGE_HTML=coverage.html
+
+all: fmt vet test build
+
+## build: Build the application
+build:
+	@echo "Building $(BINARY_NAME)..."
+	@mkdir -p $(BUILD_DIR)
+	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
+	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
+
+## clean: Clean build artifacts
+clean:
+	@echo "Cleaning..."
+	$(GOCLEAN)
+	@rm -rf $(BUILD_DIR)
+	@rm -f $(COVERAGE_FILE) $(COVERAGE_HTML)
+	@rm -rf store tmp
+	@echo "Clean complete"
+
+## test: Run all tests
+test:
+	@echo "Running tests..."
+	$(GOTEST) -v -race ./...
+
+## test-coverage: Run tests with coverage report
+test-coverage:
+	@echo "Running tests with coverage..."
+	$(GOTEST) -v -race -coverprofile=$(COVERAGE_FILE) -covermode=atomic ./...
+	$(GOCMD) tool cover -html=$(COVERAGE_FILE) -o $(COVERAGE_HTML)
+	@echo "Coverage report generated: $(COVERAGE_HTML)"
+
+## benchmark: Run benchmarks
+benchmark:
+	@echo "Running benchmarks..."
+	$(GOTEST) -bench=. -benchmem ./...
+
+## lint: Run linter
+lint:
+	@echo "Running linter..."
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	else \
+		echo "golangci-lint not installed. Install it from https://golangci-lint.run/usage/install/"; \
+	fi
+
+## fmt: Format code
+fmt:
+	@echo "Formatting code..."
+	$(GOFMT) -s -w .
+	@echo "Code formatted"
+
+## vet: Run go vet
+vet:
+	@echo "Running go vet..."
+	$(GOVET) ./...
+	@echo "Vet complete"
+
+## run: Run the application
+run:
+	@echo "Running $(BINARY_NAME)..."
+	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
+	./$(BUILD_DIR)/$(BINARY_NAME)
+
+## install: Install the application
+install:
+	@echo "Installing $(BINARY_NAME)..."
+	$(GOBUILD) -o $(GOPATH)/bin/$(BINARY_NAME) $(MAIN_PATH)
+	@echo "Installed to $(GOPATH)/bin/$(BINARY_NAME)"
+
+## deps: Download dependencies
+deps:
+	@echo "Downloading dependencies..."
+	$(GOMOD) download
+	$(GOMOD) tidy
+
+## help: Show this help message
+help:
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Available targets:"
+	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' | sed -e 's/^/ /'

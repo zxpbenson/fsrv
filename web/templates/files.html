@@ -1,0 +1,54 @@
+<html>
+  <head>
+    <title>{{.Title}}</title>
+  <script>
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(function() {
+        alert('Copied to clipboard!');
+      }, function(err) {
+        alert('Failed to copy: ' + err);
+      });
+    }
+    function delFile(file) {
+      window.location.href='/del?file='+file;
+    }
+  </script>
+  </head>
+  <body>
+    <h1>File List</h1>
+    <p><a href="/toUpload">Go to Upload Page</a></p>
+    <table border="1px">
+      <thead>
+        <tr>
+          <td>Download Link</td>
+          <td>Size</td>
+          <td>ModifyTime</td>
+          <td>CURL</td>
+          {{if .DelAble}}
+          <td>Delete</td>
+          {{end}}
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Files}}
+        <tr>
+          <td><a href="{{.DownloadLink}}">{{.Filename}}</a></td>
+          <td>{{.Size}}</td>
+          <td>{{.ModifyTime}}</td>
+          <td><code>curl -L -o '{{.Filename}}' '{{.DownloadLink}}'</code></td>
+          {{if $.DelAble}}
+          <td><button onclick="delFile('{{.Filename}}')">Delete</button></td>
+          {{end}}
+        </tr>
+        {{end}}
+        {{if .Empty}}
+        {{if .DelAble}}
+        <tr><td colspan=5>This file store is empty, you can upload something now.</td></tr>
+        {{else}}
+        <tr><td colspan=4>This file store is empty, you can upload something now.</td></tr>
+        {{end}}
+        {{end}}
+      </tbody>
+    </table>
+  </body>
+</html>

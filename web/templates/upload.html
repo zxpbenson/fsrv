@@ -1,0 +1,25 @@
+<html>
+  <head>
+    <title>{{.Title}}</title>
+  </head>
+  <body>
+    <h1>Upload File</h1>
+    <p><a href="/files">Go to File List Page</a></p>
+    <p>U can upload file by curl : </p><p>curl -F 'file=@/path/file' http://{{.Param1}}:{{.Param2}}/upload</p><p>or:</p>
+    <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
+      <input type="file" name="file" id="fileInput" text="SelectFile">
+      <input type="submit" value="Upload" text="Upload">
+    </form>
+    <p>Attention : Max upload file size is {{.Param3}}.</p>
+    <script>
+    document.getElementById("uploadForm").onsubmit = function() {
+      var fileInput = document.getElementById("fileInput");
+      if (fileInput.files.length === 0) {
+        alert("Please select a file to upload.");
+        return false; // 阻止表单提交
+      }
+      return true; // 允许表单提交
+    }
+    </script>
+  </body>
+</html>
