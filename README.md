@@ -185,6 +185,14 @@ make run
 make clean
 ```
 
+### Cross Compilation
+
+Build for multiple platforms (Linux/Windows/macOS) at once:
+
+```bash
+make cross-compile
+```
+
 ## Architecture
 
 The application follows a clean architecture pattern:

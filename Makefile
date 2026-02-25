@@ -32,6 +32,27 @@ build:
 	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
+## cross-compile: Build for multiple platforms
+# Available options for GOOS and GOARCH:
+#   Linux:   GOOS=linux   GOARCH=amd64, arm64, 386, arm, mips...
+#   Windows: GOOS=windows GOARCH=amd64, 386, arm...
+#   macOS:   GOOS=darwin  GOARCH=amd64, arm64
+#   FreeBSD: GOOS=freebsd GOARCH=amd64, 386, arm...
+cross-compile:
+	@echo "Cross compiling..."
+	@mkdir -p $(BUILD_DIR)
+	@echo "  > Building for Linux (amd64)..."
+	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(MAIN_PATH)
+	@echo "  > Building for Linux (arm64)..."
+	GOOS=linux GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 $(MAIN_PATH)
+	@echo "  > Building for Windows (amd64)..."
+	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(MAIN_PATH)
+	@echo "  > Building for macOS (amd64)..."
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(MAIN_PATH)
+	@echo "  > Building for macOS (arm64)..."
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(MAIN_PATH)
+	@echo "Cross compilation complete. Artifacts in $(BUILD_DIR)/"
+
 ## clean: Clean build artifacts
 clean:
 	@echo "Cleaning..."
