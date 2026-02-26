@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,7 +12,9 @@ import (
 	"fsrv/internal/config"
 )
 
-func setupTestService(t *testing.T) (*Service, string) {
+// setupTestService creates a temporary directory and a service instance for testing.
+// It accepts testing.TB interface to support both *testing.T and *testing.B
+func setupTestService(t testing.TB) (*Service, string) {
 	// Create temporary directory for testing
 	tmpDir, err := os.MkdirTemp("", "fsrv-test-*")
 	if err != nil {
@@ -30,7 +33,8 @@ func setupTestService(t *testing.T) (*Service, string) {
 	return svc, tmpDir
 }
 
-func cleanupTestService(t *testing.T, tmpDir string) {
+// cleanupTestService removes the temporary directory
+func cleanupTestService(t testing.TB, tmpDir string) {
 	if err := os.RemoveAll(tmpDir); err != nil {
 		t.Logf("Failed to cleanup temp dir: %v", err)
 	}
@@ -232,38 +236,46 @@ func TestService_DeleteFile_Directory(t *testing.T) {
 	}
 }
 
-func TestService_GetFilePath(t *testing.T) {
+func TestService_OpenFile(t *testing.T) {
 	svc, tmpDir := setupTestService(t)
 	defer cleanupTestService(t, tmpDir)
 
 	filename := "test.txt"
+	content := []byte("test content")
 	path := filepath.Join(tmpDir, filename)
-	if err := os.WriteFile(path, []byte("test content"), 0644); err != nil {
+	if err := os.WriteFile(path, content, 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	result, err := svc.GetFilePath(filename)
+	file, err := svc.OpenFile(filename)
 	if err != nil {
-		t.Errorf("GetFilePath() error = %v", err)
+		t.Errorf("OpenFile() error = %v", err)
 		return
 	}
+	defer file.Close()
 
-	if result != path {
-		t.Errorf("GetFilePath() returned %s, want %s", result, path)
+	// Read content from file
+	readContent, err := io.ReadAll(file)
+	if err != nil {
+		t.Errorf("Failed to read from opened file: %v", err)
+	}
+
+	if !bytes.Equal(readContent, content) {
+		t.Errorf("OpenFile() content = %s, want %s", readContent, content)
 	}
 }
 
-func TestService_GetFilePath_NotExists(t *testing.T) {
+func TestService_OpenFile_NotExists(t *testing.T) {
 	svc, tmpDir := setupTestService(t)
 	defer cleanupTestService(t, tmpDir)
 
-	_, err := svc.GetFilePath("nonexistent.txt")
+	_, err := svc.OpenFile("nonexistent.txt")
 	if err == nil {
-		t.Error("GetFilePath() should return error when file does not exist")
+		t.Error("OpenFile() should return error when file does not exist")
 	}
 }
 
-func TestService_GetFilePath_Directory(t *testing.T) {
+func TestService_OpenFile_Directory(t *testing.T) {
 	svc, tmpDir := setupTestService(t)
 	defer cleanupTestService(t, tmpDir)
 
@@ -273,9 +285,9 @@ func TestService_GetFilePath_Directory(t *testing.T) {
 		t.Fatalf("Failed to create test directory: %v", err)
 	}
 
-	_, err := svc.GetFilePath(dirname)
+	_, err := svc.OpenFile(dirname)
 	if err == nil {
-		t.Error("GetFilePath() should return error when path is a directory")
+		t.Error("OpenFile() should return error when path is a directory")
 	}
 }
 
@@ -424,15 +436,28 @@ func BenchmarkService_UploadFile(b *testing.B) {
 
 // ExampleService_ListFiles demonstrates how to list files
 func ExampleService_ListFiles() {
+	// Create a temporary directory for the example
+	tmpDir, err := os.MkdirTemp("", "fsrv-example-*")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
 	cfg := &config.Config{
 		Port:     "8080",
 		DelAble:  true,
 		Hostname: "localhost",
-		Store:    "./store",
+		Store:    tmpDir,
 		Max:      32,
 	}
 
 	svc := New(cfg)
+
+	// Create a dummy file for listing
+	if err := os.WriteFile(filepath.Join(tmpDir, "example.txt"), []byte("content"), 0644); err != nil {
+		panic(err)
+	}
+
 	files, err := svc.ListFiles()
 	if err != nil {
 		panic(err)
@@ -441,15 +466,23 @@ func ExampleService_ListFiles() {
 	for _, file := range files {
 		fmt.Printf("%s (%s)\n", file.Filename, file.Size)
 	}
+	// Output: example.txt (7 B)
 }
 
 // ExampleService_UploadFile demonstrates how to upload a file
 func ExampleService_UploadFile() {
+	// Create a temporary directory for the example
+	tmpDir, err := os.MkdirTemp("", "fsrv-example-*")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
 	cfg := &config.Config{
 		Port:     "8080",
 		DelAble:  true,
 		Hostname: "localhost",
-		Store:    "./store",
+		Store:    tmpDir,
 		Max:      32,
 	}
 

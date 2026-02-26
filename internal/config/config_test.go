@@ -97,11 +97,11 @@ func TestParse(t *testing.T) {
 	}
 }
 
-// ExampleConfig_Parse demonstrates how to parse configuration
-func ExampleConfig_Parse() {
+// ExampleParse demonstrates how to parse configuration
+func ExampleParse() {
 	// Note: This example cannot be run as-is because it requires command-line flags
 	// In real usage, you would call Parse() which reads from os.Args
-	// cfg, err := config.Parse()
+	// cfg, err := Parse(os.Args[1:])
 	// if err != nil {
 	//     log.Fatal(err)
 	// }

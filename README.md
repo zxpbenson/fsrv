@@ -21,13 +21,17 @@ fsrv/
 │       └── main.go              # Main application entry point
 ├── internal/
 │   ├── config/                  # Configuration management
-│   │   └── config.go
+│   │   ├── config.go
+│   │   └── config_test.go
 │   ├── handler/                 # HTTP request handlers
-│   │   └── handler.go
+│   │   ├── handler.go
+│   │   └── handler_test.go
 │   ├── service/                 # Business logic layer
-│   │   └── service.go
+│   │   ├── service.go
+│   │   └── service_test.go
 │   └── util/                    # Utility functions
-│       └── util.go
+│       ├── util.go
+│       └── util_test.go
 ├── web/
 │   ├── templates/               # HTML templates
 │   │   ├── files.html
@@ -161,6 +165,22 @@ This project includes a `Makefile` to simplify common development tasks.
 
 ```bash
 make test
+
+# Run tests with coverage report
+make test-coverage
+```
+
+### Code Quality
+
+```bash
+# Format code
+make fmt
+
+# Run linter
+make lint
+
+# Run vet
+make vet
 ```
 
 ### Building

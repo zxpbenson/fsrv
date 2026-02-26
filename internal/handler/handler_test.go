@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"html"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +15,7 @@ import (
 	"fsrv/internal/service"
 )
 
-func setupTestHandler(t *testing.T) (*Handler, string) {
+func setupTestHandler(t testing.TB) (*Handler, string) {
 	// Create temporary directory for testing
 	tmpDir, err := os.MkdirTemp("", "fsrv-test-*")
 	if err != nil {
@@ -30,7 +31,7 @@ func setupTestHandler(t *testing.T) (*Handler, string) {
 	// Create test templates
 	templates := map[string]string{
 		"files.html":  `{{.Title}}`,
-		"info.html":   `{{.Title}}`,
+		"info.html":   `{{.Title}}{{range .Msgs}}{{.}}{{end}}`,
 		"upload.html": `{{.Title}}`,
 	}
 
@@ -57,7 +58,7 @@ func setupTestHandler(t *testing.T) (*Handler, string) {
 	return h, tmpDir
 }
 
-func cleanupTestHandler(t *testing.T, tmpDir string) {
+func cleanupTestHandler(t testing.TB, tmpDir string) {
 	if err := os.RemoveAll(tmpDir); err != nil {
 		t.Logf("Failed to cleanup temp dir: %v", err)
 	}
@@ -141,9 +142,9 @@ func TestHandler_UploadPage_WrongMethod(t *testing.T) {
 		t.Errorf("UploadPage() status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	body := w.Body.String()
+	body := html.UnescapeString(w.Body.String())
 	if !strings.Contains(body, "HTTP Method should be 'GET'") {
-		t.Error("UploadPage() response does not contain error message")
+		t.Errorf("UploadPage() response does not contain error message. Body: %q", body)
 	}
 }
 
@@ -215,9 +216,9 @@ func TestHandler_UploadFile_WrongMethod(t *testing.T) {
 		t.Errorf("UploadFile() status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	body := w.Body.String()
+	body := html.UnescapeString(w.Body.String())
 	if !strings.Contains(body, "HTTP Method should be 'POST'") {
-		t.Error("UploadFile() response does not contain error message")
+		t.Errorf("UploadFile() response does not contain error message. Body: %q", body)
 	}
 }
 
@@ -281,9 +282,9 @@ func TestHandler_ListFiles_WrongMethod(t *testing.T) {
 		t.Errorf("ListFiles() status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	body := w.Body.String()
+	body := html.UnescapeString(w.Body.String())
 	if !strings.Contains(body, "HTTP Method should be 'GET'") {
-		t.Error("ListFiles() response does not contain error message")
+		t.Errorf("ListFiles() response does not contain error message. Body: %q", body)
 	}
 }
 
@@ -307,9 +308,9 @@ func TestHandler_DeleteFile(t *testing.T) {
 		t.Errorf("DeleteFile() status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	body := w.Body.String()
+	body := html.UnescapeString(w.Body.String())
 	if !strings.Contains(body, "Deleted file successfully") {
-		t.Error("DeleteFile() response does not contain success message")
+		t.Errorf("DeleteFile() response does not contain success message. Body: %q", body)
 	}
 
 	// Verify file was deleted
@@ -331,9 +332,9 @@ func TestHandler_DeleteFile_NotExists(t *testing.T) {
 		t.Errorf("DeleteFile() status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	body := w.Body.String()
+	body := html.UnescapeString(w.Body.String())
 	if !strings.Contains(body, "file does not exist") {
-		t.Error("DeleteFile() response does not contain error message")
+		t.Errorf("DeleteFile() response does not contain error message. Body: %q", body)
 	}
 }
 
@@ -350,9 +351,9 @@ func TestHandler_DeleteFile_WrongMethod(t *testing.T) {
 		t.Errorf("DeleteFile() status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	body := w.Body.String()
+	body := html.UnescapeString(w.Body.String())
 	if !strings.Contains(body, "HTTP Method should be 'GET'") {
-		t.Error("DeleteFile() response does not contain error message")
+		t.Errorf("DeleteFile() response does not contain error message. Body: %q", body)
 	}
 }
 
@@ -409,9 +410,9 @@ func TestHandler_DownloadFile_NotExists(t *testing.T) {
 		t.Errorf("DownloadFile() status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	body := w.Body.String()
+	body := html.UnescapeString(w.Body.String())
 	if !strings.Contains(body, "file does not exist") {
-		t.Error("DownloadFile() response does not contain error message")
+		t.Errorf("DownloadFile() response does not contain error message. Body: %q", body)
 	}
 }
 
@@ -428,9 +429,9 @@ func TestHandler_DownloadFile_WrongMethod(t *testing.T) {
 		t.Errorf("DownloadFile() status = %d, want %d", w.Code, http.StatusOK)
 	}
 
-	body := w.Body.String()
+	body := html.UnescapeString(w.Body.String())
 	if !strings.Contains(body, "HTTP Method should be 'GET'") {
-		t.Error("DownloadFile() response does not contain error message")
+		t.Errorf("DownloadFile() response does not contain error message. Body: %q", body)
 	}
 }
 

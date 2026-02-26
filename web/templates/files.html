@@ -1,54 +1,172 @@
-<html>
-  <head>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
-  <script>
-    function copyToClipboard(text) {
-      navigator.clipboard.writeText(text).then(function() {
-        alert('Copied to clipboard!');
-      }, function(err) {
-        alert('Failed to copy: ' + err);
-      });
-    }
-    function delFile(file) {
-      window.location.href='/del?file='+file;
-    }
-  </script>
-  </head>
-  <body>
-    <h1>File List</h1>
-    <p><a href="/toUpload">Go to Upload Page</a></p>
-    <table border="1px">
-      <thead>
-        <tr>
-          <td>Download Link</td>
-          <td>Size</td>
-          <td>ModifyTime</td>
-          <td>CURL</td>
-          {{if .DelAble}}
-          <td>Delete</td>
-          {{end}}
-        </tr>
-      </thead>
-      <tbody>
-        {{range .Files}}
-        <tr>
-          <td><a href="{{.DownloadLink}}">{{.Filename}}</a></td>
-          <td>{{.Size}}</td>
-          <td>{{.ModifyTime}}</td>
-          <td><code>curl -L -o '{{.Filename}}' '{{.DownloadLink}}'</code></td>
-          {{if $.DelAble}}
-          <td><button onclick="delFile('{{.Filename}}')">Delete</button></td>
-          {{end}}
-        </tr>
-        {{end}}
-        {{if .Empty}}
-        {{if .DelAble}}
-        <tr><td colspan=5>This file store is empty, you can upload something now.</td></tr>
-        {{else}}
-        <tr><td colspan=4>This file store is empty, you can upload something now.</td></tr>
-        {{end}}
-        {{end}}
-      </tbody>
-    </table>
-  </body>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --primary-hover: #0056b3;
+            --danger-color: #dc3545;
+            --danger-hover: #c82333;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-color: #333;
+            --border-color: #dee2e6;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: var(--card-bg);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .nav-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            text-decoration: underline;
+            color: var(--primary-hover);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        thead tr {
+            background-color: #343a40;
+            color: #ffffff;
+        }
+
+        tbody tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        code {
+            background-color: #f8f9fa;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: Consolas, Monaco, "Courier New", monospace;
+            border: 1px solid #e9ecef;
+            display: block;
+            white-space: nowrap;
+            overflow-x: auto;
+            max-width: 300px;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+            color: white;
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+        }
+
+        .btn-danger:hover {
+            background-color: var(--danger-hover);
+        }
+
+        .empty-message {
+            text-align: center;
+            color: #6c757d;
+            font-style: italic;
+            padding: 20px;
+        }
+    </style>
+    <script>
+        function delFile(file) {
+            if (confirm('Are you sure you want to delete "' + file + '"?')) {
+                window.location.href = '/del?file=' + encodeURIComponent(file);
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>File List</h1>
+        <a href="/toUpload" class="nav-link">← Go to Upload Page</a>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    <th>Size</th>
+                    <th>Modified Time</th>
+                    <th>Download Command</th>
+                    {{if .DelAble}}
+                    <th>Action</th>
+                    {{end}}
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Files}}
+                <tr>
+                    <td><a href="{{.DownloadLink}}">{{.Filename}}</a></td>
+                    <td>{{.Size}}</td>
+                    <td>{{.ModifyTime}}</td>
+                    <td><code>{{.Curl}}</code></td>
+                    {{if $.DelAble}}
+                    <td><button class="btn btn-danger" onclick="delFile('{{.Filename}}')">Delete</button></td>
+                    {{end}}
+                </tr>
+                {{end}}
+                {{if .Empty}}
+                <tr>
+                    <td colspan="{{if .DelAble}}5{{else}}4{{end}}" class="empty-message">
+                        This file store is empty, you can upload something now.
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</body>
 </html>

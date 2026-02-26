@@ -139,10 +139,11 @@ func (s *Service) DeleteFile(filename string) error {
 // This method uses a read lock (RLock) to protect the file opening process.
 // Once the file is successfully opened and the handle (*os.File) is returned,
 // the lock is released. This is safe because:
-// 1. On Unix-like systems, an open file handle remains valid even if the underlying
-//    directory entry is removed (e.g., via DeleteFile). The data can still be read fully.
-// 2. On Windows, the OS prevents deleting a file that is currently open. DeleteFile
-//    will fail, effectively protecting the ongoing download.
+//  1. On Unix-like systems, an open file handle remains valid even if the underlying
+//     directory entry is removed (e.g., via DeleteFile). The data can still be read fully.
+//  2. On Windows, the OS prevents deleting a file that is currently open. DeleteFile
+//     will fail, effectively protecting the ongoing download.
+//
 // This design minimizes lock contention by only holding the lock during the Open operation,
 // avoiding blocking other operations (like Upload/Delete) during long downloads.
 func (s *Service) OpenFile(filename string) (*os.File, error) {
